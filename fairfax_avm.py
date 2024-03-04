@@ -1,56 +1,37 @@
 import polars as pl
 import xgboost as xgb
 
-resi_fn = '~/Downloads/Computer_Assisted_Mass_Appraisal_-_Residential.csv'
-dat = pl.read_csv(resi_fn)
-condo_fn = '~/Downloads/Computer_Assisted_Mass_Appraisal_-_Condominium.csv'
-condo = pl.read_csv(condo_fn)
-condo = condo.rename({'LIVING_GBA':'GBA'})
-gis_fn = '~/Downloads/Address_Points.csv'
+resi_fn = '~/Downloads/Tax_Administration_s_Real_Estate_-_Sales_Data.csv'
+dat = pl.read_csv(resi_fn,
+                  columns=['PARID','SALEDT','PRICE','SALEVAL_DESC'])
+# dat['SALEVAL_DESC'].value_counts().sort(by='count').tail(10)
+dat = dat.filter(pl.col('SALEVAL_DESC')=='Valid and verified sale')
+
+gis_fn = '~/Downloads/Address_Points_fairfax.csv'
 gis = pl.read_csv(gis_fn,
-    columns=['LATITUDE','LONGITUDE','SSL','ADDRESS','RESIDENTIAL_TYPE'])
-address_fn = '~/Downloads/Address_Residential_Units.csv'
-address_residential_units = pl.read_csv(address_fn,
-     columns=['PRIMARY_ADDRESS','CONDO_SSL','FULL_ADDRESS'])
+    columns=['X','Y','ADDRESS_1','PARCEL_PIN'])
 
-condo = condo.join(address_residential_units,left_on='SSL',right_on='CONDO_SSL')
-condo = condo.join(gis,left_on='PRIMARY_ADDRESS',right_on='ADDRESS')
+dwelling_fn = '~/Downloads/Tax_Administration_s_Real_Estate_-_Dwelling_Data.csv'
+dwelling = pl.read_csv(dwelling_fn,
+    columns=['PARID','YRBLT','EFFYR','YRREMOD','RMBED','FIXBATH','FIXHALF','RECROMAREA','WBFP_PF','BSMTCAR','GRADE_DESC','SFLA','BSMT_DESC','CDU_DESC','EXTWALL_DESC','HEAT_DESC','USER13_DESC'])
+dwelling = dwelling.rename({'USER13_DESC':'ROOF'})
 
-condo = condo.filter(pl.col('RESIDENTIAL_TYPE')=='RESIDENTIAL')
-dat = dat.filter(pl.col('QUALIFIED')=='Q')
-condo = condo.filter(pl.col('QUALIFIED')=='Q')
-
-dat = dat.join(gis,on='SSL')
-
-condo = condo.rename({'FULL_ADDRESS':'ADDRESS'})
-condo = condo.select(pl.col(set(condo.columns) & set(dat.columns)))
-dat = pl.concat([dat,condo], how='diagonal_relaxed')
+dat = dat.join(gis,left_on='PARID',right_on='PARCEL_PIN')
+dat = dat.join(dwelling,left_on='PARID',right_on='PARID')
 
 dat = dat.filter(pl.col('PRICE')>1e5)
 dat = dat.filter(pl.col('PRICE')<2e6)
-dat = dat.with_columns(
-    pl.col('EYB').replace(0,None),
-    pl.col('AYB').replace(0,None)
-)
 
 dat = dat.with_columns(
-   pl.col("SALEDATE").str.to_date("%Y/%m/%d %H:%M:%S+00")
+   pl.col("SALEDT").str.to_date("%Y/%m/%d %H:%M:%S+00")
 )
 
-dat = dat.with_columns(
-   pl.col("AC")=='Y'
-)
-
-xgb_data = dat.select(pl.col(['LATITUDE','LONGITUDE',
-           'BATHRM','HF_BATHRM','HEAT','AC','ROOMS',
-                        'BEDRM','AYB','YR_RMDL','EYB','STORIES','GBA',
-                        'GRADE','CNDTN','EXTWALL','ROOF','INTWALL',
-                        'KITCHENS','FIREPLACES','LANDAREA',
-                        'SALEDATE',
-                        'NUM_UNITS','USECODE',
+xgb_data = dat.select(pl.col(['X','Y',
+            'YRBLT','EFFYR','YRREMOD','RMBED','FIXBATH','FIXHALF','RECROMAREA','WBFP_PF','BSMTCAR','GRADE_DESC','SFLA','BSMT_DESC','CDU_DESC','EXTWALL_DESC','HEAT_DESC','ROOF',
+                        'SALEDT',
                         'PRICE']))
 
-categories = ['HEAT','ROOF','EXTWALL','INTWALL','AC','USECODE']
+categories = ['GRADE_DESC','ROOF','BSMT_DESC','CDU_DESC','EXTWALL_DESC','HEAT_DESC']
 dummies = xgb_data.select(pl.col(categories)).to_dummies(drop_first=True)
 xgb_data = xgb_data.select(pl.col(set(xgb_data.columns) - set(categories)))
 xgb_data = pl.concat([xgb_data,dummies],how='horizontal')
@@ -59,8 +40,8 @@ models = []
 for iteration in range(1,10):
     # Date filtering for train/test
 
-    saledate_min = pl.col('SALEDATE').min()
-    saledate_max = pl.col('SALEDATE').max()
+    saledate_min = pl.col('SALEDT').min()
+    saledate_max = pl.col('SALEDT').max()
 
     iter_train_end_offset_str = '-%dmo' % iteration
     iter_train_end_offset = saledate_max.dt.offset_by(iter_train_end_offset_str)
@@ -68,9 +49,9 @@ for iteration in range(1,10):
     iter_test_end_offset_str = '-%dmo' % (iteration - 1)
     iter_test_end_offset = saledate_max.dt.offset_by(iter_test_end_offset_str)
 
-    train_filter = pl.col('SALEDATE').is_between(saledate_min,
+    train_filter = pl.col('SALEDT').is_between(saledate_min,
                                                  iter_train_end_offset)
-    test_filter = pl.col('SALEDATE').is_between(iter_train_end_offset,
+    test_filter = pl.col('SALEDT').is_between(iter_train_end_offset,
                                                 iter_test_end_offset)
     
     train_data = xgb_data.filter(train_filter)
@@ -83,10 +64,10 @@ for iteration in range(1,10):
 
     # Debug vars
 
-    train_date_min_debug = train_data.select('SALEDATE').min().to_numpy()[0][0]
-    train_date_max_debug = train_data.select('SALEDATE').max().to_numpy()[0][0]
-    test_date_min_debug = test_data.select('SALEDATE').min().to_numpy()[0][0]
-    test_date_max_debug = test_data.select('SALEDATE').max().to_numpy()[0][0]
+    train_date_min_debug = train_data.select('SALEDT').min().to_numpy()[0][0]
+    train_date_max_debug = train_data.select('SALEDT').max().to_numpy()[0][0]
+    test_date_min_debug = test_data.select('SALEDT').min().to_numpy()[0][0]
+    test_date_max_debug = test_data.select('SALEDT').max().to_numpy()[0][0]
 
     print('iter {}'.format(iteration))
     print('train {} to {}'.format(train_date_min_debug,train_date_max_debug))
@@ -105,7 +86,7 @@ for iteration in range(1,10):
 
     if iteration == 1:
         # nowcast predictions and comps
-        nowcast_data = dat.with_columns(pl.col('SALEDATE')
+        nowcast_data = dat.with_columns(pl.col('SALEDT')
             .max().alias('nowcast_date'))
         nowcast_data = nowcast_data.drop('PRICE')
         dnow = xgb.DMatrix(xgb_data.drop('PRICE'))
@@ -113,7 +94,7 @@ for iteration in range(1,10):
         nowcast_data = nowcast_data.with_columns(
             nowcast_prediction = nowcast_predictions
         )
-        nowcast_data.write_csv('~/Documents/nowcast_predictions.csv',
+        nowcast_data.write_csv('~/Documents/fairfax_nowcast_predictions.csv',
             separator=",")
 
     models.append(bst)
@@ -125,4 +106,4 @@ for iteration in range(1,10):
         .truediv(pl.col('PRICE')))
     xgb_err = pl.concat([xgb_err,test_data],how='diagonal')
 
-xgb_err.write_csv('~/Documents/xgb_errors.csv', separator=",")
+xgb_err.write_csv('~/Documents/fairfax_xgb_errors.csv', separator=",")
