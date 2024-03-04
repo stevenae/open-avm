@@ -1,6 +1,6 @@
 # TL;DR
 
-### I took Washington, D.C.'s open data and built an AI/ML model which produces home price predictions with <10% error. The results are available [on Google Sheets](url).
+### I took Washington, D.C.'s open data and built an AI/ML model which produces home price predictions with <10% error. The results are available [on Google Sheets](https://docs.google.com/spreadsheets/d/1jl23E8jL25VrnGmmf-hlSsi_AEmYRJM72uu7FgAOyzY/edit#gid=1961621556).
 
 ## Buying a House
 
