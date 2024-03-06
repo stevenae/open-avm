@@ -1,15 +1,15 @@
 import polars as pl
 import xgboost as xgb
 
-resi_fn = '~/Downloads/Computer_Assisted_Mass_Appraisal_-_Residential.csv'
+resi_fn = '~/Documents/Github/dc_avm/dc_data/Computer_Assisted_Mass_Appraisal_-_Residential.csv'
 dat = pl.read_csv(resi_fn)
-condo_fn = '~/Downloads/Computer_Assisted_Mass_Appraisal_-_Condominium.csv'
+condo_fn = '~/Documents/Github/dc_avm/dc_data/Computer_Assisted_Mass_Appraisal_-_Condominium.csv'
 condo = pl.read_csv(condo_fn)
 condo = condo.rename({'LIVING_GBA':'GBA'})
-gis_fn = '~/Downloads/Address_Points.csv'
+gis_fn = '~/Documents/Github/dc_avm/dc_data/Address_Points.csv'
 gis = pl.read_csv(gis_fn,
     columns=['LATITUDE','LONGITUDE','SSL','ADDRESS','RESIDENTIAL_TYPE'])
-address_fn = '~/Downloads/Address_Residential_Units.csv'
+address_fn = '~/Documents/Github/dc_avm/dc_data/Address_Residential_Units.csv'
 address_residential_units = pl.read_csv(address_fn,
      columns=['PRIMARY_ADDRESS','CONDO_SSL','FULL_ADDRESS'])
 
