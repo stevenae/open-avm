@@ -33,7 +33,8 @@ with ui.sidebar():
         "selectize",  
         "Type or select an address:",  
         list(addresses.drop_nans().sample(10000).sort()),
-        multiple=True
+        multiple=True,
+        options = {'closeAfterSelect':True}
     )
     @render.data_frame
     def summary_data():
