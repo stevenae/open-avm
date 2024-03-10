@@ -1,3 +1,4 @@
+from pathlib import Path
 from shiny import reactive
 from shiny.express import input, render, ui
 from shinywidgets import render_plotly
@@ -14,6 +15,10 @@ nowcast_price_col = 'nowcast_prediction'
 address_col = 'ADDRESS'
 location_cols = ['LATITUDE','LONGITUDE']
 nowcast_select_cols = [*rank_cols,nowcast_price_col,address_col,*location_cols]
+# sheet_id = "1jl23E8jL25VrnGmmf-hlSsi_AEmYRJM72uu7FgAOyzY"
+# fileUrl = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?gid=1756589102&format=csv"
+# www_dir = Path(__file__).parent.resolve() / "www"
+# preds_df = pd.read_csv(Path(__file__).parent / "nowcast_predictions.csv", usecols=nowcast_select_cols)
 preds_df = pd.read_csv(os.path.expanduser('~/Documents/nowcast_predictions.csv'),
                        usecols=nowcast_select_cols)
 preds_df = preds_df.rename({'ADDRESS':'Address'}, axis='columns')
