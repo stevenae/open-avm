@@ -1,22 +1,22 @@
 import polars as pl
 import xgboost as xgb
 
-resi_fn = '~/Downloads/Tax_Administration_s_Real_Estate_-_Sales_Data.csv'
+resi_fn = '~/Documents/Github/dcavm/fairfax_data/Tax_Administration_s_Real_Estate_-_Sales_Data.csv'
 dat = pl.read_csv(resi_fn,
                   columns=['PARID','SALEDT','PRICE','SALEVAL_DESC'])
 # dat['SALEVAL_DESC'].value_counts().sort(by='count').tail(10)
 dat = dat.filter(pl.col('SALEVAL_DESC')=='Valid and verified sale')
 
-gis_fn = '~/Downloads/Address_Points_fairfax.csv'
+gis_fn = '~/Documents/Github/dcavm/fairfax_data/Address_Points.csv'
 gis = pl.read_csv(gis_fn,
-    columns=['X','Y','ADDRESS_1','PARCEL_PIN'])
+    columns=['x','y','Parcel Identification Number'])
 
-dwelling_fn = '~/Downloads/Tax_Administration_s_Real_Estate_-_Dwelling_Data.csv'
+dwelling_fn = '~/Documents/Github/dcavm/fairfax_data/Tax_Administration_s_Real_Estate_-_Dwelling_Data.csv'
 dwelling = pl.read_csv(dwelling_fn,
     columns=['PARID','YRBLT','EFFYR','YRREMOD','RMBED','FIXBATH','FIXHALF','RECROMAREA','WBFP_PF','BSMTCAR','GRADE_DESC','SFLA','BSMT_DESC','CDU_DESC','EXTWALL_DESC','HEAT_DESC','USER13_DESC'])
 dwelling = dwelling.rename({'USER13_DESC':'ROOF'})
 
-dat = dat.join(gis,left_on='PARID',right_on='PARCEL_PIN')
+dat = dat.join(gis,left_on='PARID',right_on='Parcel Identification Number')
 dat = dat.join(dwelling,left_on='PARID',right_on='PARID')
 
 dat = dat.filter(pl.col('PRICE')>1e5)
@@ -26,7 +26,7 @@ dat = dat.with_columns(
    pl.col("SALEDT").str.to_date("%Y/%m/%d %H:%M:%S+00")
 )
 
-xgb_data = dat.select(pl.col(['X','Y',
+xgb_data = dat.select(pl.col(['x','y',
             'YRBLT','EFFYR','YRREMOD','RMBED','FIXBATH','FIXHALF','RECROMAREA','WBFP_PF','BSMTCAR','GRADE_DESC','SFLA','BSMT_DESC','CDU_DESC','EXTWALL_DESC','HEAT_DESC','ROOF',
                         'SALEDT',
                         'PRICE']))
