@@ -6,9 +6,21 @@ import os
 resi_fn = '~/Documents/Github/dcavm/nyc_data/rollingsales_manhattan.xlsx'
 resi_fns = glob.glob(os.path.expanduser('~/Documents/Github/dcavm/nyc_data/*.xlsx'))
 
-dats = [pl.read_excel(resi_fn,engine="calamine",read_csv_options={ "header_row": 4}) for resi_fn in resi_fns]
-pl.concat([dats[0],dats[1],dats[2],dats[3],dats[4]], how="vertical_relaxed")
-pl.concat(dats, how="vertical_relaxed")
+dats = [pl.read_excel(resi_fn,engine="calamine",read_options={ "header_row": 4}) for resi_fn in resi_fns]
+dats = pl.concat(dats, how="vertical_relaxed")
 
-# dat['SALEVAL_DESC'].value_counts().sort(by='count').tail(10)
-dat = dat.filter(pl.col('SALEVAL_DESC')=='Valid and verified sale')
+dats = dats.with_columns(
+    pl.concat_str(
+        [
+            pl.col("BOROUGH"),
+            pl.col("BLOCK"),
+            pl.col("LOT"),
+        ],
+        separator="",
+    ).cast(pl.Int64).alias("bbl"),
+)
+
+gis_fn = '~/Documents/Github/dcavm/nyc_data/Primary_Land_Use_Tax_Lot_Output__PLUTO_.csv'
+gis = pl.read_csv(gis_fn,infer_schema_length=10000)
+
+dats = dats.join(gis,on='bbl')
