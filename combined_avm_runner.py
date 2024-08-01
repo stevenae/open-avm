@@ -1,13 +1,3 @@
-def rename_cols(dat,name_dict):
-    dat.rename(name_dict)
-
-    return dat
-
-def gis_join(dat,gis,join_key):
-    dat.join(gis,on=join_key)
-
-    return dat
-
 def price_filter(dat,price_col_name,low_filter,high_filter):
     dat = dat.filter(pl.col(price_col_name)>low_filter)
     dat = dat.filter(pl.col(price_col_name)<high_filter)
@@ -85,21 +75,6 @@ def fit_model(xgb_data,date_col_name,price_col_name,region_name):
         bst = xgb.train(param, dtrain, num_round, evals=evallist,
             early_stopping_rounds=100, verbose_eval=100)
 
-        if iteration == 1:
-            # nowcast predictions and comps
-            nowcast_data = dats.with_columns(pl.col(date_col_name)
-                .max().alias('nowcast_date'))
-            nowcast_data = nowcast_data.drop(price_col_name)
-            dnow = xgb_data.drop(price_col_name)
-            dnow = dnow.with_columns(pl.col(date_col_name).cast(pl.Float64))
-            dnow = xgb.DMatrix(dnow)
-            nowcast_predictions = bst.predict(dnow)
-            nowcast_data = nowcast_data.with_columns(
-                nowcast_prediction = nowcast_predictions
-            )
-            nowcast_data.write_csv('~/Documents/Github/dcvam/'+region_name+'_nowcast_predictions.csv',
-                separator=",")
-
         models.append(bst)
 
         predictions = pl.DataFrame({'predictions' : bst.predict(dtest)})
@@ -113,3 +88,19 @@ def fit_model(xgb_data,date_col_name,price_col_name,region_name):
                         'test_data':test_data,
                         'xgb_err':xgb_err}
         return return_dict
+
+# TODO
+def generate_nowcast():
+    # nowcast predictions and comps
+    nowcast_data = dats.with_columns(pl.col(date_col_name)
+        .max().alias('nowcast_date'))
+    nowcast_data = nowcast_data.drop(price_col_name)
+    dnow = xgb_data.drop(price_col_name)
+    dnow = dnow.with_columns(pl.col(date_col_name).cast(pl.Float64))
+    dnow = xgb.DMatrix(dnow)
+    nowcast_predictions = bst.predict(dnow)
+    nowcast_data = nowcast_data.with_columns(
+        nowcast_prediction = nowcast_predictions
+    )
+    nowcast_data.write_csv('~/Documents/Github/dcvam/'+region_name+'_nowcast_predictions.csv',
+        separator=",")
