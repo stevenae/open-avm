@@ -1,31 +1,35 @@
+import polars as pl
+import xgboost as xgb
+
+
 def price_filter(dat,price_col_name,low_filter,high_filter):
     dat = dat.filter(pl.col(price_col_name)>low_filter)
     dat = dat.filter(pl.col(price_col_name)<high_filter)
 
     return dat
 
-
-def date_format(dat,fmt_str):
+def date_format(dat,date_col_name,fmt_str):
     dat = dat.with_columns(
         pl.col(date_col_name).str.to_date(fmt_str)
     )
 
     return dat
 
-def data_prep_for_model(dat,date_col_name,price_col_name,other_col_name_array,categorical_name_array):
-    all_cols = [price_col_name,date_col_name,*other_col_name_array]
+def data_prep_for_model(dat,date_col_name,price_col_name,numerical_col_name_array,categorical_name_array):
+    all_cols = [price_col_name,date_col_name,*numerical_col_name_array,*categorical_name_array]
     xgb_data = dat.select(pl.col(all_cols))
-
+    xgb_data = xgb_data.with_columns(pl.col(numerical_col_name_array).cast(pl.Float64))
+    xgb_data = xgb_data.with_columns(pl.col(price_col_name).cast(pl.Float64))
     dummies = xgb_data.select(pl.col(categorical_name_array)).to_dummies(drop_first=True)
     xgb_data = xgb_data.select(pl.col(set(xgb_data.columns) - set(categorical_name_array)))
     xgb_data = pl.concat([xgb_data,dummies],how='horizontal')
 
     return xgb_data
 
-def fit_model(xgb_data,date_col_name,price_col_name,region_name):
+def fit_model(xgb_data,date_col_name,price_col_name):
     models = []
     xgb_err = pl.DataFrame()
-
+    print(xgb_data[date_col_name])
     for iteration in range(1,10):
         # Date filtering for train/test
 
@@ -84,13 +88,13 @@ def fit_model(xgb_data,date_col_name,price_col_name,region_name):
             .truediv(pl.col(price_col_name)))
         xgb_err = pl.concat([xgb_err,test_data],how='diagonal')
 
-        return_dict = {'models':models,
-                        'test_data':test_data,
-                        'xgb_err':xgb_err}
-        return return_dict
+    return_dict = {'models':models,
+                    'test_data':test_data,
+                    'xgb_err':xgb_err}
+    return return_dict
 
 # TODO
-def generate_nowcast():
+def generate_nowcast(bst,dats,xgb_data,region_name,date_col_name,price_col_name):
     # nowcast predictions and comps
     nowcast_data = dats.with_columns(pl.col(date_col_name)
         .max().alias('nowcast_date'))
