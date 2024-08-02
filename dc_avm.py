@@ -41,88 +41,102 @@ dat = dat.with_columns(
    pl.col("AC")=='Y'
 )
 
-xgb_data = dat.select(pl.col(['LATITUDE','LONGITUDE',
-           'BATHRM','HF_BATHRM','HEAT','AC','ROOMS',
-                        'BEDRM','AYB','YR_RMDL','EYB','STORIES','GBA',
-                        'GRADE','CNDTN','EXTWALL','ROOF','INTWALL',
-                        'KITCHENS','FIREPLACES','LANDAREA',
-                        'SALEDATE',
-                        'NUM_UNITS','USECODE',
-                        'PRICE']))
+other_col_name_array = ['LATITUDE','LONGITUDE',
+            'BATHRM','HF_BATHRM','HEAT','AC','ROOMS',
+                            'BEDRM','AYB','YR_RMDL','EYB','STORIES','GBA',
+                            'GRADE','CNDTN','EXTWALL','ROOF','INTWALL',
+                            'KITCHENS','FIREPLACES','LANDAREA',
+                            'NUM_UNITS','USECODE',]
+categorical_name_array = ['HEAT','ROOF','EXTWALL','INTWALL','AC','USECODE']
+price_col_name = 'PRICE'
+date_col_name = 'SALEDATE'
+xgb_data = data_prep_for_model(dat,date_col_name,price_col_name,other_col_name_array,categorical_name_array)
+model_return = fit_model(xgb_data,date_col_name,price_col_name)
 
-categories = ['HEAT','ROOF','EXTWALL','INTWALL','AC','USECODE']
-dummies = xgb_data.select(pl.col(categories)).to_dummies(drop_first=True)
-xgb_data = xgb_data.select(pl.col(set(xgb_data.columns) - set(categories)))
-xgb_data = pl.concat([xgb_data,dummies],how='horizontal')
-xgb_err = pl.DataFrame()
-models = []
-for iteration in range(1,10):
-    # Date filtering for train/test
+region_name = 'dc'
+if(0):
+    xgb_data = dat.select(pl.col(['LATITUDE','LONGITUDE',
+            'BATHRM','HF_BATHRM','HEAT','AC','ROOMS',
+                            'BEDRM','AYB','YR_RMDL','EYB','STORIES','GBA',
+                            'GRADE','CNDTN','EXTWALL','ROOF','INTWALL',
+                            'KITCHENS','FIREPLACES','LANDAREA',
+                            'SALEDATE',
+                            'NUM_UNITS','USECODE',
+                            'PRICE']))
 
-    saledate_min = pl.col('SALEDATE').min()
-    saledate_max = pl.col('SALEDATE').max()
+    categories = ['HEAT','ROOF','EXTWALL','INTWALL','AC','USECODE']
+    dummies = xgb_data.select(pl.col(categories)).to_dummies(drop_first=True)
+    xgb_data = xgb_data.select(pl.col(set(xgb_data.columns) - set(categories)))
+    xgb_data = pl.concat([xgb_data,dummies],how='horizontal')
+    xgb_err = pl.DataFrame()
+    models = []
+    for iteration in range(1,10):
+        # Date filtering for train/test
 
-    iter_train_end_offset_str = '-%dmo' % iteration
-    iter_train_end_offset = saledate_max.dt.offset_by(iter_train_end_offset_str)
+        saledate_min = pl.col('SALEDATE').min()
+        saledate_max = pl.col('SALEDATE').max()
 
-    iter_test_end_offset_str = '-%dmo' % (iteration - 1)
-    iter_test_end_offset = saledate_max.dt.offset_by(iter_test_end_offset_str)
+        iter_train_end_offset_str = '-%dmo' % iteration
+        iter_train_end_offset = saledate_max.dt.offset_by(iter_train_end_offset_str)
 
-    train_filter = pl.col('SALEDATE').is_between(saledate_min,
-                                                 iter_train_end_offset)
-    test_filter = pl.col('SALEDATE').is_between(iter_train_end_offset,
-                                                iter_test_end_offset)
-    
-    train_data = xgb_data.filter(train_filter)
-    train_label = train_data.select('PRICE')
-    train_data = train_data.drop('PRICE')
+        iter_test_end_offset_str = '-%dmo' % (iteration - 1)
+        iter_test_end_offset = saledate_max.dt.offset_by(iter_test_end_offset_str)
 
-    test_data = xgb_data.filter(test_filter)
-    test_label = test_data.select('PRICE')
-    test_data = test_data.drop('PRICE')
+        train_filter = pl.col('SALEDATE').is_between(saledate_min,
+                                                    iter_train_end_offset)
+        test_filter = pl.col('SALEDATE').is_between(iter_train_end_offset,
+                                                    iter_test_end_offset)
+        
+        train_data = xgb_data.filter(train_filter)
+        train_label = train_data.select('PRICE')
+        train_data = train_data.drop('PRICE')
 
-    # Debug vars
+        test_data = xgb_data.filter(test_filter)
+        test_label = test_data.select('PRICE')
+        test_data = test_data.drop('PRICE')
 
-    train_date_min_debug = train_data.select('SALEDATE').min().to_numpy()[0][0]
-    train_date_max_debug = train_data.select('SALEDATE').max().to_numpy()[0][0]
-    test_date_min_debug = test_data.select('SALEDATE').min().to_numpy()[0][0]
-    test_date_max_debug = test_data.select('SALEDATE').max().to_numpy()[0][0]
+        # Debug vars
 
-    print('iter {}'.format(iteration))
-    print('train {} to {}'.format(train_date_min_debug,train_date_max_debug))
-    print('test {} to {}'.format(test_date_min_debug,test_date_max_debug))
-    print('%d tr obs, %d va obs' % (len(train_label), len(test_label)))
+        train_date_min_debug = train_data.select('SALEDATE').min().to_numpy()[0][0]
+        train_date_max_debug = train_data.select('SALEDATE').max().to_numpy()[0][0]
+        test_date_min_debug = test_data.select('SALEDATE').min().to_numpy()[0][0]
+        test_date_max_debug = test_data.select('SALEDATE').max().to_numpy()[0][0]
 
-    dtrain = xgb.DMatrix(train_data, label = train_label)
-    dtest = xgb.DMatrix(test_data, label = test_label)
-    evallist = [(dtrain, 'train'), (dtest, 'eval')]
+        print('iter {}'.format(iteration))
+        print('train {} to {}'.format(train_date_min_debug,train_date_max_debug))
+        print('test {} to {}'.format(test_date_min_debug,test_date_max_debug))
+        print('%d tr obs, %d va obs' % (len(train_label), len(test_label)))
 
-    param = {'max_depth': 10, 'eta': .01, 'objective': 'reg:tweedie',
-        'eval_metric':'mape', 'tree_method':'hist', 'grow_policy':'lossguide'}
-    num_round = 10000
-    bst = xgb.train(param, dtrain, num_round, evals=evallist,
-        early_stopping_rounds=100, verbose_eval=100)
+        dtrain = xgb.DMatrix(train_data, label = train_label)
+        dtest = xgb.DMatrix(test_data, label = test_label)
+        evallist = [(dtrain, 'train'), (dtest, 'eval')]
 
-    if iteration == 1:
-        # nowcast predictions and comps
-        nowcast_data = dat.with_columns(pl.col('SALEDATE')
-            .max().alias('nowcast_date'))
-        nowcast_data = nowcast_data.drop('PRICE')
-        dnow = xgb.DMatrix(xgb_data.drop('PRICE'))
-        nowcast_predictions = bst.predict(dnow)
-        nowcast_data = nowcast_data.with_columns(
-            nowcast_prediction = nowcast_predictions
-        )
-        nowcast_data.write_csv('~/Documents/nowcast_predictions.csv',
-            separator=",")
+        param = {'max_depth': 10, 'eta': .01, 'objective': 'reg:tweedie',
+            'eval_metric':'mape', 'tree_method':'hist', 'grow_policy':'lossguide'}
+        num_round = 10000
+        bst = xgb.train(param, dtrain, num_round, evals=evallist,
+            early_stopping_rounds=100, verbose_eval=100)
 
-    models.append(bst)
+        if iteration == 1:
+            # nowcast predictions and comps
+            nowcast_data = dat.with_columns(pl.col('SALEDATE')
+                .max().alias('nowcast_date'))
+            nowcast_data = nowcast_data.drop('PRICE')
+            dnow = xgb.DMatrix(xgb_data.drop('PRICE'))
+            nowcast_predictions = bst.predict(dnow)
+            nowcast_data = nowcast_data.with_columns(
+                nowcast_prediction = nowcast_predictions
+            )
+            nowcast_data.write_csv('~/Documents/nowcast_predictions.csv',
+                separator=",")
 
-    predictions = pl.DataFrame({'predictions' : bst.predict(dtest)})
-    test_data = pl.concat([test_data,predictions,test_label],how='horizontal')
-    test_data = test_data.with_columns(error =
-        abs(pl.col('PRICE').sub(pl.col('predictions')))
-        .truediv(pl.col('PRICE')))
-    xgb_err = pl.concat([xgb_err,test_data],how='diagonal')
+        models.append(bst)
 
-xgb_err.write_csv('~/Documents/xgb_errors.csv', separator=",")
+        predictions = pl.DataFrame({'predictions' : bst.predict(dtest)})
+        test_data = pl.concat([test_data,predictions,test_label],how='horizontal')
+        test_data = test_data.with_columns(error =
+            abs(pl.col('PRICE').sub(pl.col('predictions')))
+            .truediv(pl.col('PRICE')))
+        xgb_err = pl.concat([xgb_err,test_data],how='diagonal')
+
+    xgb_err.write_csv('~/Documents/xgb_errors.csv', separator=",")
