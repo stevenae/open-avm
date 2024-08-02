@@ -2,7 +2,6 @@ import polars as pl
 import xgboost as xgb
 import glob
 import os
-from postal.parser import parse_address
 
 resi_fns = glob.glob(os.path.expanduser('~/Documents/Github/dcavm/nys_data/*.CSV'))
 
@@ -28,4 +27,5 @@ gis = gis.with_columns(
     ).str.to_lowercase().alias('joinkey'),
     )
 
-dats.join(gis,on='joinkey').shape
+dats = dats.join(gis,on='joinkey')
+
