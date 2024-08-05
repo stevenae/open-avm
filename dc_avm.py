@@ -1,7 +1,7 @@
 import polars as pl
 import xgboost as xgb
 
-def prep_dc(){
+def prep_dc():
     resi_fn = '~/Documents/Github/dcavm/dc_data/Computer_Assisted_Mass_Appraisal_-_Residential.csv'
     dat = pl.read_csv(resi_fn)
     condo_fn = '~/Documents/Github/dcavm/dc_data/Computer_Assisted_Mass_Appraisal_-_Condominium.csv'
@@ -51,7 +51,7 @@ def prep_dc(){
     categorical_name_array = ['HEAT','ROOF','EXTWALL','INTWALL','AC','USECODE']
     price_col_name = 'PRICE'
     date_col_name = 'SALEDATE'
-}
+
 
 xgb_data = data_prep_for_model(dat,date_col_name,price_col_name,other_col_name_array,categorical_name_array)
 model_return = fit_model(xgb_data,date_col_name,price_col_name)
