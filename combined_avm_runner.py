@@ -1,8 +1,8 @@
 import polars as pl
 import xgboost as xgb
-import glob
-import os
-import re
+# import glob
+# import os
+# import re
 
 def price_filter(dat,price_col_name,low_filter,high_filter):
     dat = dat.with_columns(pl.col(price_col_name).cast(pl.Float64))
@@ -167,86 +167,4 @@ def prep_dc():
 
     return [dat,date_col_name,price_col_name,numerical_col_name_array,categorical_name_array]
 
-def prep_nyc():
-    resi_fns = glob.glob(os.path.expanduser('~/Documents/Github/dcavm/nyc_data/*.xlsx'))
-
-    dats = []
-    for resi_fn in resi_fns:
-        dat = pl.read_excel(resi_fn,engine="calamine")
-        header_row_ind = dat.select(pl.first().str.contains('BOROUGH')).to_numpy().nonzero()[0][0]
-        dat = dat.rename(dat[header_row_ind,].to_dicts().pop())
-        dat = dat.rename(lambda column_name: re.sub(r'[^a-zA-Z0-9]', '', column_name).lower())
-        dat = dat.slice(header_row_ind+1)
-        dats.append(dat)
-
-    dats = pl.concat(dats, how="diagonal_relaxed")
-
-    dats = dats.filter(pl.col('taxclassattimeofsale').str.contains_any(['1','2']))
-
-    dats = dats.with_columns(block_pad = pl.col('block').cast(pl.String).str.zfill(5))
-    dats = dats.with_columns(lot_pad = pl.col('lot').cast(pl.String).str.zfill(4))
-    dats = dats.with_columns(
-        pl.concat_str(
-            [
-                pl.col("borough"),
-                pl.col("block_pad"),
-                pl.col("lot_pad"),
-            ],
-            separator="",
-        ).cast(pl.Float64).alias("bbl"),
-    )
-
-    gis_fn = '~/Documents/Github/dcavm/nyc_data/pluto_24v2.csv'
-    gis = pl.read_csv(gis_fn,infer_schema_length=10000)
-
-    dats = dats.join(gis,on='bbl')
-
-    dats.columns
-
-    # dats = dats.with_columns(pl.col('SALE PRICE').cast(pl.Float64))
-    # dats = dats.filter(pl.col('SALE PRICE')>1e5)
-    # dats = dats.filter(pl.col('SALE PRICE')<2e6)
-    price_col_name = 'saleprice'
-    dats = price_filter(dats,price_col_name,1e5,2e6)
-
-    dats = dats.with_columns(
-        pl.col('yearbuilt').replace(0,None),
-        pl.col('yearalter1').replace(0,None),
-        pl.col('yearalter2').replace(0,None)
-    )
-
-    date_col_name = 'saledate'
-    fmt_str = "%Y-%m-%d %H:%M:%S"
-    dats = date_format(dats,date_col_name,fmt_str)
-
-    categorical_name_array = [#'borough','neighborhood',
-    'buildingclasscategory',#'block','lot','easement',
-    # 'landuse','ltdheight','bldgclass',
-    'schooldist'#,'council'
-    ]
-    numerical_col_name_array = [
-#         'residentialunits',
-#     'commercialunits',
-#  'totalunits',
- 'landsquarefeet',
- 'grosssquarefeet',
-#  'lotarea','bldgarea','comarea','resarea','officearea',
-#   'retailarea',
-#  'garagearea',
-#  'strgearea',
-#  'factryarea',
-#  'otherarea',
-#  'numbldgs',
-#  'numfloors',
-#  'unitsres',
-#  'unitstotal',
-#  'lotfront',
-#  'lotdepth',
-#  'bldgfront',
-#  'bldgdepth',
- 'latitude','longitude',
-    'yearbuilt','yearalter1','yearalter2']
-
-    return [dats,date_col_name,price_col_name,numerical_col_name_array,categorical_name_array]
-
-fit_model(*data_prep_for_model(*prep_nyc()))
+fit_model(*data_prep_for_model(*prep_dc()))
